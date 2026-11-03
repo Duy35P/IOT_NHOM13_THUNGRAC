@@ -1,0 +1,725 @@
+[
+  {
+    "id": "tab1",
+    "type": "tab",
+    "label": "Thung Rac - Middleware",
+    "disabled": false,
+    "info": "Tang 3 Middleware: Rule 1 chong tran, Rule 2 che do ECO, Watchdog mat tin hieu, ghi log CSV."
+  },
+  {
+    "id": "broker1",
+    "type": "mqtt-broker",
+    "name": "HiveMQ",
+    "broker": "broker.hivemq.com",
+    "port": "1883",
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+  {
+    "id": "ui_tab1",
+    "type": "ui_tab",
+    "name": "Thung Rac",
+    "icon": "dashboard",
+    "order": 1,
+    "disabled": false,
+    "hidden": false
+  },
+  {
+    "id": "g1",
+    "type": "ui_group",
+    "name": "Giam sat BIN1",
+    "tab": "ui_tab1",
+    "order": 1,
+    "disp": true,
+    "width": "6",
+    "collapse": false
+  },
+  {
+    "id": "g2",
+    "type": "ui_group",
+    "name": "Dieu khien tu xa",
+    "tab": "ui_tab1",
+    "order": 2,
+    "disp": true,
+    "width": "6",
+    "collapse": false
+  },
+  {
+    "z": "tab1",
+    "x": 140,
+    "y": 80,
+    "wires": [
+      [
+        "router",
+        "dbg"
+      ]
+    ],
+    "id": "mqtt_in",
+    "type": "mqtt in",
+    "name": "doan/nhom15/+/+",
+    "topic": "doan/nhom15/+/+",
+    "qos": "0",
+    "datatype": "utf8",
+    "broker": "broker1",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0
+  },
+  {
+    "z": "tab1",
+    "x": 380,
+    "y": 80,
+    "wires": [
+      [
+        "rule1"
+      ],
+      [
+        "battery_txt"
+      ],
+      [
+        "alert_fn"
+      ],
+      [
+        "gps_fn"
+      ],
+      [
+        "cfg_sync"
+      ],
+      [
+        "watchdog"
+      ]
+    ],
+    "id": "router",
+    "type": "function",
+    "name": "Router (bin/type)",
+    "outputs": 6,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "func": "const p = msg.topic.split('/');\nif (p.length < 4) return null;\nflow.set('lastSeen_' + p[2], Date.now());\nconst base = { bin: p[2], type: p[3], payload: String(msg.payload) };\nconst o = [null, null, null, null, null, { ...base, topic: p[2] }];\nif (p[3] === 'khoangcach') o[0] = base;\nelse if (p[3] === 'battery') o[1] = base;\nelse if (p[3] === 'canhbao') o[2] = base;\nelse if (p[3] === 'gps') o[3] = base;\nelse if (p[3] === 'config') o[4] = base;\nreturn o;"
+  },
+  {
+    "z": "tab1",
+    "x": 640,
+    "y": 40,
+    "wires": [
+      [
+        "gauge"
+      ],
+      [
+        "chart"
+      ],
+      [
+        "mqtt_out_lock"
+      ],
+      [
+        "log_fmt",
+        "toast"
+      ]
+    ],
+    "id": "rule1",
+    "type": "function",
+    "name": "RULE 1: Chong tran -> khoa nap",
+    "outputs": 4,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "func": "const bin = msg.bin;\nconst d = parseFloat(msg.payload);\nif (isNaN(d)) return null;\nconst thr = flow.get('thr_' + bin) || 5;\nconst locked = flow.get('lock_' + bin) || false;\nconst pct = Math.max(0, Math.min(100, Math.round((40 - d) / (40 - thr) * 100)));\nconst o = [{ payload: pct, topic: bin }, { payload: d, topic: bin }, null, null];\nconst lockTopic = 'doan/nhom15/' + bin + '/lock';\nif (d <= thr && !locked) {\n  flow.set('lock_' + bin, true);\n  o[2] = { topic: lockTopic, payload: '1' };\n  o[3] = { bin, level: 'RULE1_KHOA_NAP', payload: 'Thung day (' + d + 'cm <= ' + thr + 'cm) -> khoa nap chong tran' };\n} else if (d > thr + 3 && locked) { // histeresis 3cm tranh khoa/mo lien tuc\n  flow.set('lock_' + bin, false);\n  o[2] = { topic: lockTopic, payload: '0' };\n  o[3] = { bin, level: 'RULE1_MO_KHOA', payload: 'Da do rac (' + d + 'cm) -> mo khoa nap' };\n}\nreturn o;"
+  },
+  {
+    "z": "tab1",
+    "x": 930,
+    "y": 40,
+    "wires": [],
+    "id": "mqtt_out_lock",
+    "type": "mqtt out",
+    "name": "publish .../lock (retain)",
+    "topic": "",
+    "qos": "0",
+    "retain": "true",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "broker1"
+  },
+  {
+    "z": "tab1",
+    "x": 900,
+    "y": 90,
+    "wires": [],
+    "id": "gauge",
+    "type": "ui_gauge",
+    "name": "",
+    "group": "g1",
+    "order": 1,
+    "width": 0,
+    "height": 0,
+    "gtype": "gage",
+    "title": "Muc rac",
+    "label": "%",
+    "format": "{{value}}",
+    "min": 0,
+    "max": 100,
+    "colors": [
+      "#00b500",
+      "#e6e600",
+      "#ca3838"
+    ],
+    "seg1": "50",
+    "seg2": "85",
+    "diff": false,
+    "className": ""
+  },
+  {
+    "z": "tab1",
+    "x": 900,
+    "y": 130,
+    "wires": [],
+    "id": "chart",
+    "type": "ui_chart",
+    "name": "",
+    "group": "g1",
+    "order": 2,
+    "width": 0,
+    "height": 0,
+    "label": "Khoang cach (cm)",
+    "chartType": "line",
+    "legend": "false",
+    "xformat": "HH:mm:ss",
+    "interpolate": "linear",
+    "nodata": "Cho du lieu...",
+    "dot": false,
+    "ymin": "0",
+    "ymax": "45",
+    "removeOlder": 1,
+    "removeOlderPoints": "",
+    "removeOlderUnit": "3600",
+    "cutout": 0,
+    "useOneColor": false,
+    "useUTC": false,
+    "colors": [
+      "#1f77b4",
+      "#aec7e8",
+      "#ff7f0e",
+      "#2ca02c",
+      "#98df8a",
+      "#d62728",
+      "#ff9896",
+      "#9467bd",
+      "#c5b0d5"
+    ],
+    "outputs": 1,
+    "useDifferentColor": false,
+    "className": ""
+  },
+  {
+    "z": "tab1",
+    "x": 640,
+    "y": 180,
+    "wires": [],
+    "id": "battery_txt",
+    "type": "ui_text",
+    "group": "g1",
+    "order": 3,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "Pin",
+    "format": "{{msg.payload}} %",
+    "layout": "row-spread",
+    "className": ""
+  },
+  {
+    "z": "tab1",
+    "x": 640,
+    "y": 230,
+    "wires": [
+      [
+        "gps_txt"
+      ],
+      [
+        "log_fmt"
+      ]
+    ],
+    "id": "gps_fn",
+    "type": "function",
+    "name": "GPS -> link Maps + log",
+    "outputs": 2,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "func": "const m = msg.payload.match(/Lat:\\s*([0-9.]+),\\s*Lng:\\s*([0-9.]+)/);\nconst link = m ? 'https://www.google.com/maps/search/?api=1&query=' + m[1] + ',' + m[2] : msg.payload;\nreturn [{ payload: '<a href=\"' + link + '\" target=\"_blank\">' + msg.payload + '</a>' }, { bin: msg.bin, level: 'GPS', payload: msg.payload }];"
+  },
+  {
+    "z": "tab1",
+    "x": 900,
+    "y": 230,
+    "wires": [],
+    "id": "gps_txt",
+    "type": "ui_text",
+    "group": "g1",
+    "order": 4,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "GPS",
+    "format": "{{msg.payload}}",
+    "layout": "row-spread",
+    "className": ""
+  },
+  {
+    "z": "tab1",
+    "x": 640,
+    "y": 290,
+    "wires": [
+      [
+        "log_fmt"
+      ],
+      [
+        "opens_txt"
+      ],
+      [
+        "toast"
+      ]
+    ],
+    "id": "alert_fn",
+    "type": "function",
+    "name": "Canh bao + dem lan mo nap",
+    "outputs": 3,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "func": "const o = [{ bin: msg.bin, level: 'CANH_BAO', payload: msg.payload }, null, null];\nif (msg.payload.includes('mở nắp')) {\n  const day = new Date().toLocaleDateString('vi-VN');\n  let c = flow.get('opens') || { day, n: 0 };\n  if (c.day !== day) c = { day, n: 0 };\n  c.n++;\n  flow.set('opens', c);\n  o[1] = { payload: c.n };\n}\nif (msg.payload.includes('KHẨN CẤP')) o[2] = { payload: msg.payload };\nreturn o;"
+  },
+  {
+    "z": "tab1",
+    "x": 900,
+    "y": 290,
+    "wires": [],
+    "id": "opens_txt",
+    "type": "ui_text",
+    "group": "g1",
+    "order": 5,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "Luot mo nap hom nay",
+    "format": "{{msg.payload}}",
+    "layout": "row-spread",
+    "className": ""
+  },
+  {
+    "z": "tab1",
+    "x": 900,
+    "y": 340,
+    "wires": [],
+    "id": "toast",
+    "type": "ui_toast",
+    "position": "top right",
+    "displayTime": "5",
+    "highlight": "",
+    "sendall": true,
+    "outputLayout": "default",
+    "decay": "",
+    "topic": "Canh bao thung rac",
+    "name": "",
+    "className": ""
+  },
+  {
+    "z": "tab1",
+    "x": 640,
+    "y": 380,
+    "wires": [
+      []
+    ],
+    "id": "cfg_sync",
+    "type": "function",
+    "name": "Dong bo nguong tu Web",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "func": "const n = parseInt(msg.payload);\nif (n > 0 && n <= 100) flow.set('thr_' + msg.bin, n);\nreturn null;"
+  },
+  {
+    "z": "tab1",
+    "x": 140,
+    "y": 460,
+    "wires": [
+      [
+        "thr_fn"
+      ]
+    ],
+    "id": "thr_ui",
+    "type": "ui_numeric",
+    "name": "",
+    "label": "Nguong bao day (cm)",
+    "tooltip": "",
+    "group": "g2",
+    "order": 1,
+    "width": 0,
+    "height": 0,
+    "wrap": false,
+    "passthru": false,
+    "topic": "thr",
+    "topicType": "str",
+    "format": "{{value}}",
+    "min": 2,
+    "max": 40,
+    "step": 1,
+    "className": ""
+  },
+  {
+    "z": "tab1",
+    "x": 380,
+    "y": 460,
+    "wires": [
+      [
+        "mqtt_out"
+      ],
+      [
+        "log_fmt"
+      ]
+    ],
+    "id": "thr_fn",
+    "type": "function",
+    "name": "Dat nguong BIN1 -> config",
+    "outputs": 2,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "func": "const n = parseInt(msg.payload);\nif (!(n > 0 && n <= 100)) return null;\nflow.set('thr_bin1', n);\nreturn [{ topic: 'doan/nhom15/bin1/config', payload: String(n) }, { bin: 'bin1', level: 'CAU_HINH', payload: 'Dat nguong bao day = ' + n + 'cm' }];"
+  },
+  {
+    "z": "tab1",
+    "x": 640,
+    "y": 460,
+    "wires": [],
+    "id": "mqtt_out",
+    "type": "mqtt out",
+    "name": "publish (topic tu msg)",
+    "topic": "",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "broker1"
+  },
+  {
+    "z": "tab1",
+    "x": 140,
+    "y": 540,
+    "wires": [
+      [
+        "rule2"
+      ]
+    ],
+    "id": "tick",
+    "type": "inject",
+    "name": "moi 30s + khi khoi dong",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "30",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "2",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date"
+  },
+  {
+    "z": "tab1",
+    "x": 140,
+    "y": 590,
+    "wires": [
+      [
+        "rule2"
+      ]
+    ],
+    "id": "eco_ui",
+    "type": "ui_switch",
+    "name": "",
+    "label": "Ep che do ECO (demo ban dem)",
+    "tooltip": "",
+    "group": "g2",
+    "order": 2,
+    "width": 0,
+    "height": 0,
+    "passthru": false,
+    "decouple": "false",
+    "topic": "eco",
+    "topicType": "str",
+    "style": "",
+    "onvalue": "true",
+    "onvalueType": "bool",
+    "onicon": "",
+    "oncolor": "",
+    "offvalue": "false",
+    "offvalueType": "bool",
+    "officon": "",
+    "offcolor": "",
+    "animate": false,
+    "className": ""
+  },
+  {
+    "z": "tab1",
+    "x": 380,
+    "y": 560,
+    "wires": [
+      [
+        "mqtt_out_mode"
+      ],
+      [
+        "log_fmt"
+      ],
+      [
+        "mode_txt"
+      ]
+    ],
+    "id": "rule2",
+    "type": "function",
+    "name": "RULE 2: ECO 22h-05h (scheduler)",
+    "outputs": 3,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "func": "if (msg.topic === 'eco') flow.set('forceEco', msg.payload === true);\nconst h = new Date().getHours();\nconst eco = flow.get('forceEco') || h >= 22 || h < 5;\nconst mode = eco ? 'ECO' : 'NORMAL';\nif (flow.get('mode') === mode) return null; // chi gui khi doi trang thai\nflow.set('mode', mode);\nreturn [\n  { topic: 'doan/nhom15/bin1/mode', payload: mode },\n  { bin: 'bin1', level: 'RULE2_' + mode, payload: eco ? 'Vao che do ECO: gian chu ky do 3s -> 30s' : 'Ve che do NORMAL: chu ky do 3s' },\n  { payload: mode }\n];"
+  },
+  {
+    "z": "tab1",
+    "x": 660,
+    "y": 540,
+    "wires": [],
+    "id": "mqtt_out_mode",
+    "type": "mqtt out",
+    "name": "publish .../mode (retain)",
+    "topic": "",
+    "qos": "0",
+    "retain": "true",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "broker1"
+  },
+  {
+    "z": "tab1",
+    "x": 660,
+    "y": 590,
+    "wires": [],
+    "id": "mode_txt",
+    "type": "ui_text",
+    "group": "g2",
+    "order": 3,
+    "width": 0,
+    "height": 0,
+    "name": "",
+    "label": "Che do",
+    "format": "{{msg.payload}}",
+    "layout": "row-spread",
+    "className": ""
+  },
+  {
+    "z": "tab1",
+    "x": 640,
+    "y": 680,
+    "wires": [
+      [
+        "wd_sw"
+      ]
+    ],
+    "id": "watchdog",
+    "type": "trigger",
+    "name": "Watchdog 20s / thung",
+    "op1": "alive",
+    "op2": "OFFLINE",
+    "op1type": "str",
+    "op2type": "str",
+    "duration": "20",
+    "extend": true,
+    "overrideDelay": false,
+    "units": "s",
+    "reset": "",
+    "bytopic": "topic",
+    "topic": "topic",
+    "outputs": 1
+  },
+  {
+    "z": "tab1",
+    "x": 860,
+    "y": 680,
+    "wires": [
+      [
+        "wd_fn"
+      ]
+    ],
+    "id": "wd_sw",
+    "type": "switch",
+    "name": "chi OFFLINE",
+    "property": "payload",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "OFFLINE",
+        "vt": "str"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1
+  },
+  {
+    "z": "tab1",
+    "x": 1050,
+    "y": 680,
+    "wires": [
+      [
+        "log_fmt"
+      ],
+      [
+        "toast"
+      ]
+    ],
+    "id": "wd_fn",
+    "type": "function",
+    "name": "ABNORMAL: mat tin hieu",
+    "outputs": 2,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "func": "const bin = msg.topic;\nconst mode = flow.get('mode') || 'NORMAL';\nconst lastSeen = flow.get('lastSeen_' + bin) || 0;\nconst now = Date.now();\nif (mode === 'ECO' && (now - lastSeen) < 60000) return null;\nconst timeoutTxt = (mode === 'ECO') ? '> 60s' : '> 20s';\nconst txt = 'MAT TIN HIEU ' + String(bin).toUpperCase() + ' ' + timeoutTxt + ' (offline / het pin / mat Wi-Fi)';\nreturn [{ bin: bin, level: 'LOI_MAT_TIN_HIEU', payload: txt }, { payload: txt }];"
+  },
+  {
+    "z": "tab1",
+    "x": 140,
+    "y": 760,
+    "wires": [
+      [
+        "log_init"
+      ]
+    ],
+    "id": "log_start",
+    "type": "inject",
+    "name": "khoi dong: tao file log",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date"
+  },
+  {
+    "z": "tab1",
+    "x": 380,
+    "y": 760,
+    "wires": [
+      [
+        "log_file"
+      ]
+    ],
+    "id": "log_init",
+    "type": "function",
+    "name": "Tao ten file + header (BOM)",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "func": "const d = new Date();\nconst s = d.toISOString().replace(/[:.]/g, '-').slice(0, 19);\nconst file = 'logs/Lich_Su_NodeRED_' + s + '.csv';\nflow.set('logfile', file);\nreturn { filename: file, payload: '\\uFEFFThoi_Gian,Thung_Rac,Loai,Noi_Dung\\n' };"
+  },
+  {
+    "z": "tab1",
+    "x": 380,
+    "y": 830,
+    "wires": [
+      [
+        "log_file"
+      ]
+    ],
+    "id": "log_fmt",
+    "type": "function",
+    "name": "Dinh dang dong CSV",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "func": "const file = flow.get('logfile');\nif (!file) return null;\nconst t = new Date().toLocaleString('vi-VN', { hour12: false });\nconst v = String(msg.payload).replace(/\"/g, '\"\"');\nreturn { filename: file, payload: t + ',\"' + (msg.bin || 'he_thong') + '\",\"' + (msg.level || 'INFO') + '\",\"' + v + '\"\\n' };"
+  },
+  {
+    "z": "tab1",
+    "x": 640,
+    "y": 800,
+    "wires": [],
+    "id": "log_file",
+    "type": "file",
+    "name": "ghi logs/*.csv",
+    "filename": "filename",
+    "filenameType": "msg",
+    "appendNewline": false,
+    "createDir": true,
+    "overwriteFile": "false",
+    "encoding": "none"
+  },
+  {
+    "z": "tab1",
+    "x": 380,
+    "y": 20,
+    "wires": [],
+    "id": "dbg",
+    "type": "debug",
+    "name": "MQTT vao",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto"
+  }
+]

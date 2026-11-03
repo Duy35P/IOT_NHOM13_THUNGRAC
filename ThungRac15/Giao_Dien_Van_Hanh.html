@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trung Tâm Giám Sát & Quản Lý Thùng Rác Thông Minh - Smart Waste IoT</title>
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- MQTT.js -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-light: #eff6ff;
+            --success: #10b981;
+            --success-light: #ecfdf5;
+            --warning: #f59e0b;
+            --warning-light: #fffbeb;
+            --danger: #ef4444;
+            --danger-light: #fef2f2;
+            --slate-50: #f8fafc;
+            --slate-100: #f1f5f9;
+            --slate-200: #e2e8f0;
+            --slate-400: #94a3b8;
+            --slate-600: #475569;
+            --slate-700: #334155;
+            --slate-800: #1e293b;
+            --slate-900: #0f172a;
+            --radius-md: 12px;
+            --radius-lg: 18px;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background-color: #f8fafc;
+            color: var(--slate-800);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Navigation Header */
+        header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            padding: 16px 28px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1440px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+        }
+
+        .brand-text h1 {
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(to right, #ffffff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-text p {
+            font-size: 12px;
+            color: var(--slate-400);
+            font-weight: 500;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .live-clock {
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 6px 14px;
+            border-radius: 30px;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .network-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #cbd5e1;
+        }
+
+        .status-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background-color: var(--warning);
+            position: relative;
+        }
+
+        .status-dot.connected {
+            background-color: var(--success);
+            box-shadow: 0 0 10px var(--success);
+        }
+
+        .status-dot.connected::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            border-radius: 50%;
+            background-color: var(--success);
+            animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(2.8); opacity: 0; }
+        }
+
+        /* Main Container */
+        main {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 24px;
+            width: 100%;
+            flex: 1;
+        }
+
+        /* KPI Overview Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 18px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--slate-200);
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+        }
+
+        .stat-info h4 {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--slate-600);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .stat-info .stat-value {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--slate-900);
+            line-height: 1.2;
+            margin-top: 2px;
+        }
+
+        /* Section Headers */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--slate-800);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title i {
+            color: var(--primary);
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn-secondary {
+            background: white;
+            border: 1px solid var(--slate-200);
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--slate-700);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: var(--transition);
+        }
+
+        .btn-secondary:hover {
+            background: var(--slate-50);
+            border-color: var(--slate-400);
+        }
+
+        /* Grid chứa Card Thùng Rác */
+        .bins-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 22px;
+            margin-bottom: 32px;
+        }
+
+        /* Thẻ Thùng Rác Riêng Biệt */
+        .bin-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--slate-200);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .bin-card:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-3px);
+            border-color: #cbd5e1;
+        }
+
+        .bin-card.urgent {
+            border-top: 4px solid var(--danger);
+        }
+
+        .bin-card.warning {
+            border-top: 4px solid var(--warning);
+        }
+
+        .bin-card.normal {
+            border-top: 4px solid var(--success);
+        }
+
+        .card-top {
+            padding: 18px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--slate-50);
+            border-bottom: 1px solid var(--slate-100);
+        }
+
+        .bin-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .bin-badge-icon {
+            width: 38px;
+            height: 38px;
+            background: white;
+            border: 1px solid var(--slate-200);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--slate-700);
+            font-size: 16px;
+        }
+
+        .bin-title-text h3 {
+            font-size: 17px;
+            font-weight: 800;
+            color: var(--slate-900);
+            text-transform: uppercase;
+        }
+
+        .bin-title-text span {
+            font-size: 11px;
+            color: var(--slate-600);
+            font-weight: 600;
+        }
+
+        .bin-battery {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: white;
+            border: 1px solid var(--slate-200);
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .card-body {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            flex: 1;
+        }
+
+        /* Mô Phỏng Bình Rác 3D Trực Quan */
+        .visual-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            padding: 16px;
+            border-radius: 14px;
+            border: 1px solid var(--slate-200);
+        }
+
+        .cylinder-tank {
+            width: 72px;
+            height: 140px;
+            background: #e2e8f0;
+            border: 3px solid #94a3b8;
+            border-radius: 12px 12px 8px 8px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.15);
+            flex-shrink: 0;
+        }
+
+        .cylinder-fill {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 0%;
+            background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
+            transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+
+        .cylinder-markers {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 6px 0;
+        }
+
+        .marker-line {
+            width: 12px;
+            height: 2px;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .visual-details {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .level-badge-large {
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+        }
+
+        .level-percent {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--slate-900);
+            line-height: 1;
+        }
+
+        .level-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--slate-600);
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            width: fit-content;
+        }
+
+        .status-pill.pill-normal {
+            background: var(--success-light);
+            color: #065f46;
+        }
+
+        .status-pill.pill-warning {
+            background: var(--warning-light);
+            color: #92400e;
+        }
+
+        .status-pill.pill-danger {
+            background: var(--danger-light);
+            color: #991b1b;
+            animation: pulse-danger 1.5s infinite;
+        }
+
+        @keyframes pulse-danger {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.65; }
+        }
+
+        /* Thông số chi tiết */
+        .specs-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            background: white;
+        }
+
+        .spec-item {
+            background: var(--slate-50);
+            border: 1px solid var(--slate-100);
+            padding: 10px 12px;
+            border-radius: 8px;
+        }
+
+        .spec-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--slate-600);
+            margin-bottom: 2px;
+        }
+
+        .spec-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--slate-800);
+        }
+
+        /* Banner cảnh báo mới nhất */
+        .recent-alert-box {
+            background: #fff1f2;
+            border: 1px solid #ffe4e6;
+            border-radius: 8px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #be123c;
+        }
+
+        /* Form điều khiển cấu hình ngưỡng */
+        .config-card {
+            background: var(--slate-50);
+            border: 1px solid var(--slate-200);
+            border-radius: 10px;
+            padding: 12px 14px;
+        }
+
+        .config-header {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--slate-700);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .config-form {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .config-input-wrapper {
+            position: relative;
+            flex: 1;
+        }
+
+        .config-input {
+            width: 100%;
+            padding: 7px 32px 7px 10px;
+            border: 1px solid var(--slate-200);
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--slate-800);
+            background: white;
+            outline: none;
+            transition: var(--transition);
+        }
+
+        .config-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .config-input-unit {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--slate-400);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        /* Nút Xem Bản Đồ */
+        .btn-map-action {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: white;
+            border: 1px solid #bfdbfe;
+            color: var(--primary);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .btn-map-action:hover {
+            background: var(--primary-light);
+            border-color: var(--primary);
+        }
+
+        /* Switch Toggle (iOS style) */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 42px;
+            height: 22px;
+            flex-shrink: 0;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e1;
+            transition: .3s;
+            border-radius: 22px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+        }
+
+        input:checked + .slider {
+            background-color: #6366f1;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
+        .eco-control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: #f8fafc;
+            border: 1px solid var(--slate-200);
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .eco-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--slate-700);
+        }
+
+        .eco-badge {
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: #f1f5f9;
+            color: var(--slate-600);
+            transition: var(--transition);
+        }
+
+        .eco-badge.active {
+            background: #e0e7ff;
+            color: #4338ca;
+            border: 1px solid #c7d2fe;
+        }
+
+        /* Watchdog indicator & card timeout */
+        .watchdog-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--slate-600);
+            padding: 7px 11px;
+            border-radius: 6px;
+            background: var(--slate-100);
+            border: 1px solid var(--slate-200);
+        }
+
+        .watchdog-indicator.alert {
+            background: #fef2f2;
+            border-color: #fecaca;
+            color: #dc2626;
+            font-weight: 700;
+        }
+
+        .bin-card.timeout {
+            border: 2px dashed #ef4444 !important;
+            background: #fffafa;
+        }
+
+        .bin-card.timeout .card-top {
+            background: #fef2f2;
+        }
+
+        /* Nhật Ký Hoạt Động (Activity Logs Table) */
+        .logs-section {
+            background: white;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--slate-200);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .logs-header {
+            padding: 18px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--slate-200);
+            background: var(--slate-50);
+        }
+
+        .logs-table-wrapper {
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .logs-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        .logs-table th {
+            background: white;
+            padding: 12px 20px;
+            font-weight: 700;
+            color: var(--slate-600);
+            border-bottom: 1px solid var(--slate-200);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .logs-table td {
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--slate-100);
+            color: var(--slate-700);
+        }
+
+        .logs-table tr:hover {
+            background: var(--slate-50);
+        }
+
+        .log-tag {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .log-tag.alert-urgent { background: #fee2e2; color: #991b1b; }
+        .log-tag.alert-lid { background: #f3e8ff; color: #6b21a8; }
+        .log-tag.alert-gps { background: #e0f2fe; color: #0369a1; }
+        .log-tag.alert-config { background: #fef3c7; color: #92400e; }
+
+        /* Floating Toast Notification */
+        #toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 9999;
+        }
+
+        .toast {
+            background: white;
+            border-radius: 10px;
+            padding: 14px 18px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.12);
+            border-left: 4px solid var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            min-width: 300px;
+            animation: slideInRight 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .toast.success { border-left-color: var(--success); }
+        .toast.danger { border-left-color: var(--danger); }
+        .toast.warning { border-left-color: var(--warning); }
+
+        /* Empty State */
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px 20px;
+            background: white;
+            border-radius: var(--radius-lg);
+            border: 2px dashed var(--slate-200);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            color: var(--slate-400);
+            margin-bottom: 12px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--slate-400);
+            font-size: 12px;
+            margin-top: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="header-content">
+            <div class="brand">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-recycle"></i>
+                </div>
+                <div class="brand-text">
+                    <h1>SMART TRASH BIN CLOUD</h1>
+                    <p>Hệ Thống Quản Lý Thùng Rác Thông Minh Tập Trung • Đồ Án IoT Nhóm 15</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="live-clock" id="liveClock">
+                    <i class="fa-regular fa-clock"></i> <span id="clockText">--:--:--</span>
+                </div>
+                <div class="network-status">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Đang kết nối MQTT...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- KPI Overview Cards -->
+        <section class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #eff6ff; color: #2563eb;">
+                    <i class="fa-solid fa-dumpster"></i>
+                </div>
+                <div class="stat-info">
+                    <h4>Tổng Số Thùng</h4>
+                    <div class="stat-value" id="kpiTotalBins">0</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #ecfdf5; color: #10b981;">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <div class="stat-info">
+                    <h4>Trạng Thái Bình Thường</h4>
+                    <div class="stat-value" id="kpiNormalBins" style="color: #10b981;">0</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #fef2f2; color: #ef4444;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div class="stat-info">
+                    <h4>Cần Thu Gom Gấp</h4>
+                    <div class="stat-value" id="kpiUrgentBins" style="color: #ef4444;">0</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #fefce8; color: #ca8a04;">
+                    <i class="fa-solid fa-bolt"></i>
+                </div>
+                <div class="stat-info">
+                    <h4>Năng Lượng TB</h4>
+                    <div class="stat-value" id="kpiAvgBattery">--%</div>
+                </div>
+            </div>
+
+            <div class="stat-card" id="kpiTimeoutCard">
+                <div class="stat-icon" style="background: #f1f5f9; color: #64748b;" id="kpiTimeoutIcon">
+                    <i class="fa-solid fa-satellite-dish"></i>
+                </div>
+                <div class="stat-info">
+                    <h4>Mất Tín Hiệu (Watchdog)</h4>
+                    <div class="stat-value" id="kpiTimeoutBins" style="color: #64748b;">0</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Devices Section -->
+        <div class="section-header">
+            <div class="section-title">
+                <i class="fa-solid fa-microchip"></i> Danh Sách Thiết Bị Trực Tuyến
+            </div>
+            <div class="filter-controls">
+                <span style="font-size: 13px; color: var(--slate-500); font-weight: 600;"><i class="fa-solid fa-tower-broadcast"></i> Tự động nhận diện Node đa điểm</span>
+            </div>
+        </div>
+
+        <!-- Dynamic Bin Cards Grid -->
+        <div class="bins-grid" id="bins-container">
+            <!-- Trạng thái chờ thiết bị -->
+            <div class="empty-state" id="emptyStatePlaceholder">
+                <div class="empty-state-icon">
+                    <i class="fa-solid fa-satellite-dish"></i>
+                </div>
+                <h3 style="font-size: 16px; color: var(--slate-700); margin-bottom: 6px;">Đang quét tín hiệu thùng rác...</h3>
+                <p style="font-size: 13px; color: var(--slate-400);">Hãy khởi động mạch Wokwi trong VSCode để thùng rác tự động kết nối vào hệ thống.</p>
+            </div>
+        </div>
+
+        <!-- Realtime Activity Logs -->
+        <section class="logs-section">
+            <div class="logs-header">
+                <div class="section-title" style="margin: 0; font-size: 16px;">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Nhật Ký Hoạt Động & Biến Cố Thời Gian Thực
+                </div>
+                <button class="btn-secondary" onclick="clearLogs()">
+                    <i class="fa-solid fa-trash-can"></i> Xóa bảng log
+                </button>
+            </div>
+            <div class="logs-table-wrapper">
+                <table class="logs-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 140px;">Thời Gian</th>
+                            <th style="width: 130px;">Thiết Bị</th>
+                            <th style="width: 150px;">Phân Loại</th>
+                            <th>Nội Dung Thông Điệp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTableBody">
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: var(--slate-400); padding: 30px;">
+                                <i class="fa-regular fa-folder-open"></i> Chưa có sự kiện nào được ghi nhận.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- Floating Toast Container -->
+    <div id="toast-container"></div>
+
+    <footer>
+        Dự án Hệ Thống Thùng Rác Thông Minh (Smart Waste Management) • Bộ môn Hệ Thống IoT • Đại Học Công Nghệ
+    </footer>
+
+    <!-- Logic Script -->
+    <script>
+        // Đồng hồ thời gian thực
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('vi-VN');
+            const dateStr = now.toLocaleDateString('vi-VN');
+            document.getElementById('clockText').innerText = `${timeStr} - ${dateStr}`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Hệ thống Toast thông báo
+        function showToast(message, type = 'primary') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            let icon = 'fa-info-circle';
+            if (type === 'success') icon = 'fa-circle-check';
+            if (type === 'danger') icon = 'fa-triangle-exclamation';
+            if (type === 'warning') icon = 'fa-bell';
+
+            toast.innerHTML = `
+                <i class="fa-solid ${icon}" style="font-size: 18px;"></i>
+                <span>${message}</span>
+            `;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // Cấu hình MQTT
+        const client_id = "Manager_Pro_" + Math.random().toString(16).substr(2, 8);
+        const client = mqtt.connect('ws://broker.hivemq.com:8000/mqtt', { clientId: client_id, reconnectPeriod: 2000 });
+
+        // Database nội bộ quản lý trạng thái các thùng rác
+        const binsData = {};
+
+        client.on('connect', function () {
+            const dot = document.getElementById("statusDot");
+            const text = document.getElementById("statusText");
+            dot.className = "status-dot connected";
+            text.innerText = "Trực tuyến (broker.hivemq.com)";
+            showToast("Đã kết nối thành công tới trạm Cloud MQTT!", "success");
+            client.subscribe("doan/nhom15/#");
+        });
+
+        client.on('offline', function () {
+            const dot = document.getElementById("statusDot");
+            const text = document.getElementById("statusText");
+            dot.className = "status-dot";
+            text.innerText = "Mất kết nối mạng";
+            showToast("Cảnh báo: Mất kết nối tới máy chủ MQTT!", "danger");
+        });
+
+        client.on('reconnect', function () {
+            const dot = document.getElementById("statusDot");
+            const text = document.getElementById("statusText");
+            dot.className = "status-dot";
+            text.innerText = "Đang kết nối lại...";
+        });
+
+        // Hàm gửi cấu hình ngưỡng rác mới xuống ESP32
+        function sendConfig(binId) {
+            const inputVal = document.getElementById(`input_${binId}`).value;
+            const threshold = parseInt(inputVal);
+            if (threshold > 0 && threshold <= 100) {
+                client.publish(`doan/nhom15/${binId}/config`, threshold.toString());
+                if (binsData[binId]) {
+                    binsData[binId].threshold = threshold;
+                }
+                showToast(`Đã điều chỉnh mốc báo đầy của ${binId.toUpperCase()} thành ${threshold}cm!`, "success");
+                addLogEntry(binId, "Cấu hình ngưỡng", `Đặt ngưỡng báo đầy mới: ${threshold}cm`, "alert-config");
+                updateBinDisplay(binId);
+            } else {
+                showToast("Vui lòng nhập khoảng cách hợp lệ (1 - 100 cm)", "warning");
+            }
+        }
+
+        // Thao tác 4: Hàm bật/tắt chế độ ECO ban đêm (30s/lần)
+        function toggleEcoMode(binId, isChecked) {
+            const mode = isChecked ? "ECO" : "NORMAL";
+            client.publish(`doan/nhom15/${binId}/mode`, mode);
+            if (binsData[binId]) {
+                binsData[binId].mode = mode;
+            }
+            if (isChecked) {
+                showToast(`🌙 [${binId.toUpperCase()}] Đã BẬT Chế độ ECO (chu kỳ đo dãn 30s/lần)!`, "primary");
+                addLogEntry(binId, "Chế độ ECO", "Người dùng Web: BẬT chế độ ECO tiết kiệm pin ban đêm (30s)", "alert-config");
+            } else {
+                showToast(`☀️ [${binId.toUpperCase()}] Đã TẮT Chế độ ECO (trở lại chu kỳ bình thường 3s/lần)!`, "success");
+                addLogEntry(binId, "Chế độ ECO", "Người dùng Web: TẮT chế độ ECO, trở lại chu kỳ bình thường (3s)", "alert-normal");
+            }
+            updateBinDisplay(binId);
+        }
+
+        // Nhận dữ liệu từ Broker
+        client.on('message', function (topic, message) {
+            const payload = message.toString();
+            const parts = topic.split('/');
+            if (parts.length < 4) return;
+
+            const binId = parts[2].toLowerCase(); // e.g., "bin1"
+            const dataType = parts[3]; // "khoangcach", "battery", "canhbao", "gps"
+
+            // Khởi tạo thùng rác nếu chưa có
+            if (!binsData[binId]) {
+                binsData[binId] = {
+                    id: binId,
+                    name: `Thùng Rác ${binId.replace('bin', ' #')}`,
+                    distance: 35,
+                    percent: 0,
+                    battery: 85,
+                    threshold: 5,
+                    statusText: "Bình thường",
+                    lastAlert: "Chưa có biến cố",
+                    lastAlertTime: "--:--:--",
+                    gpsLink: null,
+                    gpsRaw: null,
+                    mode: "NORMAL",
+                    lastSeen: Date.now(),
+                    isTimeout: false,
+                    secondsInactive: 0
+                };
+                createBinCard(binId);
+            }
+
+            // Ghi nhận nhịp tim sống còn Heartbeat cho Watchdog
+            const wasTimeout = binsData[binId].isTimeout;
+            binsData[binId].lastSeen = Date.now();
+            binsData[binId].secondsInactive = 0;
+            if (wasTimeout) {
+                binsData[binId].isTimeout = false;
+                showToast(`✅ [${binId.toUpperCase()}] Tín hiệu kết nối đã phục hồi!`, "success");
+                addLogEntry(binId, "Khôi phục", "Đã nhận lại dữ liệu Heartbeat từ thiết bị (Online)", "alert-normal");
+            }
+
+            // Xử lý từng luồng thông số
+            if (dataType === "khoangcach") {
+                const dist = parseFloat(payload);
+                binsData[binId].distance = dist;
+                calculatePercent(binId);
+            } 
+            else if (dataType === "battery") {
+                binsData[binId].battery = parseInt(payload);
+            } 
+            else if (dataType === "canhbao") {
+                binsData[binId].lastAlert = payload;
+                binsData[binId].lastAlertTime = new Date().toLocaleTimeString('vi-VN');
+                
+                let tagClass = "alert-lid";
+                if (payload.includes("KHẨN CẤP") || payload.includes("ĐẦY")) {
+                    tagClass = "alert-urgent";
+                    showToast(`⚠️ [${binId.toUpperCase()}]: ${payload}`, "danger");
+                } else {
+                    showToast(`🔔 [${binId.toUpperCase()}]: ${payload}`, "warning");
+                }
+                addLogEntry(binId, "Cảnh báo / Nắp", payload, tagClass);
+            } 
+            else if (dataType === "gps") {
+                binsData[binId].gpsRaw = payload;
+                const match = payload.match(/Lat:\s*([0-9.]+),\s*Lng:\s*([0-9.]+)/);
+                if (match && match.length === 3) {
+                    const lat = match[1];
+                    const lng = match[2];
+                    binsData[binId].gpsLink = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+                }
+                addLogEntry(binId, "Tọa độ GPS", payload, "alert-gps");
+                showToast(`📍 [${binId.toUpperCase()}] Đã nhận tọa độ GPS!`, "primary");
+            }
+            // ponytail: synchronize Node-RED lock/mode/config with Web HTML
+            else if (dataType === "lock") {
+                binsData[binId].locked = (payload === "1");
+                addLogEntry(binId, "Khóa nắp", payload === "1" ? "Node-RED: ĐÃ KHÓA NẮP (chống tràn)" : "Node-RED: ĐÃ MỞ KHÓA NẮP", payload === "1" ? "alert-urgent" : "alert-lid");
+                showToast(payload === "1" ? `🔒 [${binId.toUpperCase()}] ĐÃ KHÓA NẮP (Chống tràn)` : `🔓 [${binId.toUpperCase()}] ĐÃ MỞ KHÓA NẮP`, payload === "1" ? "danger" : "primary");
+            }
+            else if (dataType === "mode") {
+                binsData[binId].mode = payload;
+                addLogEntry(binId, "Chế độ", `Node-RED chuyển chế độ: ${payload}`, "alert-config");
+                showToast(`⚙️ [${binId.toUpperCase()}] Chế độ hoạt động: ${payload}`, "primary");
+            }
+            else if (dataType === "config") {
+                const newThresh = parseInt(payload);
+                if (!isNaN(newThresh) && newThresh > 0 && newThresh <= 100) {
+                    binsData[binId].threshold = newThresh;
+                    const inputField = document.getElementById(`input_${binId}`);
+                    if (inputField) inputField.value = newThresh;
+                    calculatePercent(binId);
+                }
+            }
+
+            updateBinDisplay(binId);
+            updateGlobalKPIs();
+        });
+
+        // Tính toán phần trăm dung tích rác
+        function calculatePercent(binId) {
+            const b = binsData[binId];
+            const binHeight = 40; // Giả sử chiều cao chuẩn thùng là 40cm
+            let pct = 0;
+            if (b.distance >= binHeight) pct = 0;
+            else if (b.distance <= b.threshold) pct = 100;
+            else pct = Math.round(((binHeight - b.distance) / (binHeight - b.threshold)) * 100);
+
+            b.percent = Math.min(100, Math.max(0, pct));
+        }
+
+        // Tạo thẻ giao diện Thùng Rác mới
+        function createBinCard(binId) {
+            const placeholder = document.getElementById("emptyStatePlaceholder");
+            if (placeholder) placeholder.style.display = "none";
+
+            const container = document.getElementById("bins-container");
+            const card = document.createElement("div");
+            card.className = "bin-card normal";
+            card.id = `card_${binId}`;
+
+            card.innerHTML = `
+                <div class="card-top">
+                    <div class="bin-meta">
+                        <div class="bin-badge-icon">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </div>
+                        <div class="bin-title-text">
+                            <h3>${binsData[binId].name}</h3>
+                            <span>Mã Node: ${binId.toUpperCase()}</span>
+                        </div>
+                    </div>
+                    <div class="bin-battery" id="bat_${binId}">
+                        <i class="fa-solid fa-battery-three-quarters"></i> <span>--%</span>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Trực Quan Hóa Mức Rác -->
+                    <div class="visual-container">
+                        <div class="cylinder-tank">
+                            <div class="cylinder-fill" id="fill_${binId}"></div>
+                            <div class="cylinder-markers">
+                                <div class="marker-line" style="background: rgba(239, 68, 68, 0.7); width: 100%;"></div>
+                                <div class="marker-line"></div>
+                                <div class="marker-line"></div>
+                                <div class="marker-line"></div>
+                            </div>
+                        </div>
+
+                        <div class="visual-details">
+                            <div class="level-badge-large">
+                                <span class="level-percent" id="pctText_${binId}">0%</span>
+                                <span class="level-label">Dung tích</span>
+                            </div>
+                            <div id="pill_${binId}" class="status-pill pill-normal">
+                                <i class="fa-solid fa-check"></i> Đang hoạt động
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Danh Sách Thông Số Kỹ Thuật -->
+                    <div class="specs-list">
+                        <div class="spec-item">
+                            <div class="spec-title"><i class="fa-solid fa-ruler-vertical"></i> Khoảng cách</div>
+                            <div class="spec-value" id="distVal_${binId}">-- cm</div>
+                        </div>
+                        <div class="spec-item">
+                            <div class="spec-title"><i class="fa-solid fa-bullseye"></i> Ngưỡng báo đầy</div>
+                            <div class="spec-value" id="threshVal_${binId}">5 cm</div>
+                        </div>
+                    </div>
+
+                    <!-- Cảnh báo gần nhất -->
+                    <div class="recent-alert-box" id="recentAlert_${binId}">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <span id="alertText_${binId}">Chưa có biến cố bất thường</span>
+                    </div>
+
+                    <!-- Thao tác 5: Giám sát sống còn Watchdog Timer 20s -->
+                    <div class="watchdog-indicator" id="watchdogBox_${binId}">
+                        <span><i class="fa-solid fa-satellite-dish"></i> Giám sát sống còn (Watchdog):</span>
+                        <span id="watchdogVal_${binId}" style="font-weight: 700;">🟢 Trực tuyến (0s)</span>
+                    </div>
+
+                    <!-- Thao tác 4: Bộ điều khiển cấu hình từ xa & Chế độ ECO -->
+                    <div class="config-card">
+                        <div class="config-header">
+                            <i class="fa-solid fa-sliders"></i> Cài Đặt Ngưỡng Báo Đầy Từ Xa
+                        </div>
+                        <div class="config-form">
+                            <div class="config-input-wrapper">
+                                <input type="number" id="input_${binId}" class="config-input" value="5" min="2" max="40">
+                                <span class="config-input-unit">cm</span>
+                            </div>
+                            <button class="btn-primary" onclick="sendConfig('${binId}')">
+                                <i class="fa-solid fa-paper-plane"></i> Áp Dụng
+                            </button>
+                        </div>
+                        <!-- Công tắc bật/tắt chế độ ECO ban đêm -->
+                        <div class="eco-control-row">
+                            <div class="eco-label">
+                                <i class="fa-solid fa-moon" style="color: #6366f1; font-size: 14px;"></i>
+                                <span>Chế Độ ECO Ban Đêm (30s)</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label class="switch">
+                                    <input type="checkbox" id="ecoSwitch_${binId}" onchange="toggleEcoMode('${binId}', this.checked)">
+                                    <span class="slider"></span>
+                                </label>
+                                <span id="ecoBadge_${binId}" class="eco-badge">NORMAL (3s)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Nút Mở Google Maps -->
+                    <a id="mapLink_${binId}" href="#" target="_blank" class="btn-map-action" style="display: none;">
+                        <i class="fa-solid fa-location-dot"></i> Định Vị Trên Google Maps
+                    </a>
+                </div>
+            `;
+
+            container.appendChild(card);
+        }
+
+        // Cập nhật giao diện của 1 thẻ thùng rác
+        function updateBinDisplay(binId) {
+            const b = binsData[binId];
+            if (!b) return;
+
+            const card = document.getElementById(`card_${binId}`);
+            if (!card) return;
+
+            // Cập nhật Pin
+            const batElem = document.getElementById(`bat_${binId}`);
+            batElem.innerHTML = `<i class="fa-solid ${getBatteryIcon(b.battery)}"></i> <span>${b.battery}%</span>`;
+            if (b.battery < 20) batElem.style.color = 'var(--danger)';
+            else if (b.battery < 50) batElem.style.color = 'var(--warning)';
+            else batElem.style.color = 'var(--success)';
+
+            // Cập nhật Cột Đồ Thị và %
+            const fillElem = document.getElementById(`fill_${binId}`);
+            const pctText = document.getElementById(`pctText_${binId}`);
+            const pill = document.getElementById(`pill_${binId}`);
+            const distVal = document.getElementById(`distVal_${binId}`);
+            const threshVal = document.getElementById(`threshVal_${binId}`);
+
+            fillElem.style.height = `${b.percent}%`;
+            pctText.innerText = `${b.percent}%`;
+            distVal.innerText = `${b.distance} cm`;
+            threshVal.innerText = `${b.threshold} cm`;
+
+            // Thao tác 4: Cập nhật Chế độ ECO
+            const ecoSwitch = document.getElementById(`ecoSwitch_${binId}`);
+            const ecoBadge = document.getElementById(`ecoBadge_${binId}`);
+            if (ecoSwitch) ecoSwitch.checked = (b.mode === 'ECO');
+            if (ecoBadge) {
+                if (b.mode === 'ECO') {
+                    ecoBadge.className = "eco-badge active";
+                    ecoBadge.innerText = "ECO (30s)";
+                } else {
+                    ecoBadge.className = "eco-badge";
+                    ecoBadge.innerText = "NORMAL (3s)";
+                }
+            }
+
+            // Thao tác 5: Cập nhật Giám sát sống còn Watchdog Box thích ứng động theo chế độ
+            const watchdogBox = document.getElementById(`watchdogBox_${binId}`);
+            const watchdogVal = document.getElementById(`watchdogVal_${binId}`);
+            const timeoutLimit = (b.mode === 'ECO') ? 60 : 20;
+            if (watchdogVal && watchdogBox) {
+                const elapsed = b.secondsInactive || 0;
+                if (b.isTimeout) {
+                    watchdogBox.className = "watchdog-indicator alert";
+                    watchdogVal.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> MẤT TÍN HIỆU (${elapsed}s / ${timeoutLimit}s)`;
+                } else {
+                    watchdogBox.className = "watchdog-indicator";
+                    watchdogVal.innerHTML = `<i class="fa-solid fa-check"></i> Trực tuyến (${elapsed}s / ${timeoutLimit}s)`;
+                }
+            }
+
+            // Đổi màu sắc theo mức độ rác, trạng thái khóa và lỗi rớt mạng
+            card.className = "bin-card";
+            if (b.isTimeout) {
+                card.classList.add("timeout");
+                fillElem.style.background = "linear-gradient(180deg, #94a3b8 0%, #64748b 100%)";
+                pill.className = "status-pill pill-danger";
+                pill.style.animation = "pulse-ring 1.5s infinite";
+                pill.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> MẤT KẾT NỐI (${b.secondsInactive || timeoutLimit}s)`;
+            } else if (b.locked) {
+                card.classList.add("urgent");
+                fillElem.style.background = "linear-gradient(180deg, #f87171 0%, #ef4444 100%)";
+                pill.className = "status-pill pill-danger";
+                pill.style.animation = "";
+                pill.innerHTML = `<i class="fa-solid fa-lock"></i> ĐÃ KHÓA NẮP (Chống tràn)`;
+            } else if (b.percent >= 85) {
+                card.classList.add("urgent");
+                fillElem.style.background = "linear-gradient(180deg, #f87171 0%, #ef4444 100%)";
+                pill.className = "status-pill pill-danger";
+                pill.style.animation = "";
+                pill.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Thùng Rác Đã Đầy!`;
+            } else if (b.percent >= 50) {
+                card.classList.add("warning");
+                fillElem.style.background = "linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)";
+                pill.className = "status-pill pill-warning";
+                pill.style.animation = "";
+                pill.innerHTML = `<i class="fa-solid fa-clock"></i> Rác Sắp Đầy`;
+            } else {
+                card.classList.add("normal");
+                fillElem.style.background = "linear-gradient(180deg, #34d399 0%, #10b981 100%)";
+                pill.className = "status-pill pill-normal";
+                pill.style.animation = "";
+                pill.innerHTML = `<i class="fa-solid fa-check"></i> Hoạt Động Tốt ${b.mode === 'ECO' ? '<span style="font-size:10px; background:#e0e7ff; color:#3730a3; padding:2px 6px; border-radius:4px; margin-left:4px;">ECO</span>' : ''}`;
+            }
+
+            // Cập nhật cảnh báo
+            const alertText = document.getElementById(`alertText_${binId}`);
+            if (b.isTimeout) {
+                alertText.innerText = `⚠️ LOI_MAT_TIN_HIEU: Quá ${timeoutLimit}s không có dữ liệu heartbeat (${b.secondsInactive}s)`;
+            } else {
+                alertText.innerText = b.lastAlert;
+            }
+
+            // Cập nhật link Google Maps
+            const mapLink = document.getElementById(`mapLink_${binId}`);
+            if (b.gpsLink) {
+                mapLink.href = b.gpsLink;
+                mapLink.style.display = "flex";
+            }
+        }
+
+        // Chọn icon pin tương ứng
+        function getBatteryIcon(level) {
+            if (level >= 80) return "fa-battery-full";
+            if (level >= 60) return "fa-battery-three-quarters";
+            if (level >= 40) return "fa-battery-half";
+            if (level >= 20) return "fa-battery-quarter";
+            return "fa-battery-empty";
+        }
+
+        // Cập nhật các chỉ số tổng thể ở thanh KPI
+        function updateGlobalKPIs() {
+            const keys = Object.keys(binsData);
+            const total = keys.length;
+            let urgent = 0;
+            let normal = 0;
+            let timeout = 0;
+            let totalBat = 0;
+
+            keys.forEach(k => {
+                const b = binsData[k];
+                if (b.isTimeout) {
+                    timeout++;
+                } else if (b.percent >= 80 || b.locked) {
+                    urgent++;
+                } else {
+                    normal++;
+                }
+                totalBat += b.battery;
+            });
+
+            const elTotal = document.getElementById("kpiTotalBins");
+            const elNormal = document.getElementById("kpiNormalBins");
+            const elUrgent = document.getElementById("kpiUrgentBins");
+            const elTimeout = document.getElementById("kpiTimeoutBins");
+            const elAvgBat = document.getElementById("kpiAvgBattery");
+
+            if (elTotal) elTotal.innerText = total;
+            if (elNormal) elNormal.innerText = normal;
+            if (elUrgent) elUrgent.innerText = urgent;
+            if (elTimeout) {
+                elTimeout.innerText = timeout;
+                const icon = document.getElementById("kpiTimeoutIcon");
+                if (icon) {
+                    if (timeout > 0) {
+                        icon.style.background = "#fef2f2";
+                        icon.style.color = "#ef4444";
+                        elTimeout.style.color = "#ef4444";
+                    } else {
+                        icon.style.background = "#f1f5f9";
+                        icon.style.color = "#64748b";
+                        elTimeout.style.color = "#64748b";
+                    }
+                }
+            }
+            if (elAvgBat) elAvgBat.innerText = total > 0 ? Math.round(totalBat / total) + "%" : "--%";
+        }
+
+        // Thao tác 5: Bộ hẹn giờ Dynamic Adaptive Watchdog (Thích ứng theo chu kỳ gửi tin)
+        // - Chế độ NORMAL (gửi 3s): Ngưỡng timeout là 20s (cho phép rớt ~6 gói tin liên tiếp)
+        // - Chế độ ECO (gửi 30s): Ngưỡng timeout tự động dãn lên 60s (cho phép rớt 2 chu kỳ) để triệt tiêu báo động giả
+        setInterval(function runWatchdogTimer() {
+            const now = Date.now();
+
+            Object.keys(binsData).forEach(binId => {
+                const b = binsData[binId];
+                if (!b.lastSeen) b.lastSeen = now;
+                const lastTime = (typeof b.lastSeen === 'number') ? b.lastSeen : new Date(b.lastSeen).getTime();
+                const seconds = Math.floor((now - lastTime) / 1000);
+                b.secondsInactive = seconds;
+
+                const timeoutLimit = (b.mode === 'ECO') ? 60 : 20;
+
+                if (seconds >= timeoutLimit) {
+                    if (!b.isTimeout) {
+                        b.isTimeout = true;
+                        showToast(`⚠️ [${binId.toUpperCase()}] MẤT TÍN HIỆU TIMEOUT (> ${timeoutLimit}s)! Thiết bị có thể đã sập nguồn hoặc ngắt Wi-Fi.`, "danger");
+                        addLogEntry(binId, "Sự cố mạng", `LOI_MAT_TIN_HIEU: Quá ${timeoutLimit}s không nhận được heartbeat (Chế độ ${b.mode || 'NORMAL'})`, "alert-urgent");
+                    }
+                } else {
+                    if (b.isTimeout) {
+                        b.isTimeout = false;
+                        showToast(`✅ [${binId.toUpperCase()}] Tín hiệu kết nối đã phục hồi!`, "success");
+                        addLogEntry(binId, "Khôi phục", `Tín hiệu kết nối đã phục hồi sau sự cố`, "alert-normal");
+                    }
+                }
+                updateBinDisplay(binId);
+            });
+
+            updateGlobalKPIs();
+        }, 1000);
+
+        // Thêm hàng vào bảng nhật ký thời gian thực
+        function addLogEntry(binId, type, message, tagClass) {
+            const tbody = document.getElementById("logsTableBody");
+            // Xóa hàng placeholder nếu là dòng đầu tiên
+            if (tbody.children.length === 1 && tbody.children[0].children.length === 1) {
+                tbody.innerHTML = "";
+            }
+
+            const row = document.createElement("tr");
+            const timeStr = new Date().toLocaleTimeString('vi-VN');
+
+            row.innerHTML = `
+                <td style="font-weight: 700; color: var(--slate-600);">${timeStr}</td>
+                <td><span style="font-weight: 800; color: var(--primary); text-transform: uppercase;">${binId}</span></td>
+                <td><span class="log-tag ${tagClass}">${type}</span></td>
+                <td style="font-weight: 600;">${message}</td>
+            `;
+
+            tbody.insertBefore(row, tbody.firstChild);
+
+            // Giữ tối đa 50 dòng log
+            if (tbody.children.length > 50) {
+                tbody.removeChild(tbody.lastChild);
+            }
+        }
+
+        function clearLogs() {
+            const tbody = document.getElementById("logsTableBody");
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align: center; color: var(--slate-400); padding: 30px;">
+                        <i class="fa-regular fa-folder-open"></i> Chưa có sự kiện nào được ghi nhận.
+                    </td>
+                </tr>
+            `;
+            showToast("Đã xóa sạch lịch sử nhật ký hiển thị!", "primary");
+        }
+    </script>
+</body>
+</html>
